@@ -8,6 +8,7 @@ Pomodoro Timer for M5Stack StickC Plus 2.
 
 - Pomodoro Timer: 25 min focus / 5 min short break / 15 min long break
 - Grayscale UI inspired by [tDisplayS3WeatherStation](https://github.com/VolosR/tDisplayS3WeatherStation)
+- Battery level indicator (color-coded: green/yellow/red)
 - Configurable sound and visual alerts (beeps/flashes count)
 - Web interface for settings (Access Point mode)
 - Persistent settings (survive restart)
@@ -100,6 +101,7 @@ Pomodoro Timer embarcado para M5Stack StickC Plus 2.
 
 - Timer Pomodoro: 25 min foco / 5 min descanso / 15 min descanso longo
 - Interface grayscale inspirada em [tDisplayS3WeatherStation](https://github.com/VolosR/tDisplayS3WeatherStation)
+- Indicador de bateria (cores: verde/amarelo/vermelho)
 - Alertas sonoros e visuais configuráveis (quantidade de beeps/flashes)
 - Interface web para configurações (Access Point)
 - Configurações persistentes (sobrevivem a reinício)

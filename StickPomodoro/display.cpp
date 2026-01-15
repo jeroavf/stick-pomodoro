@@ -61,11 +61,35 @@ void drawHeader(const char* title, uint8_t cycle, uint8_t maxCycles) {
     drawCycleIndicator(SCREEN_WIDTH - 60, 10, cycle, maxCycles);
 }
 
+void drawBatteryIcon(int x, int y, int level) {
+    // Battery outline horizontal (18x8)
+    canvas.drawRect(x, y, 16, 8, grays[4]);
+    canvas.fillRect(x + 16, y + 2, 2, 4, grays[4]);  // Battery tip
+
+    // Fill based on level
+    int fillWidth = map(level, 0, 100, 0, 14);
+    if (fillWidth > 0) {
+        uint16_t color;
+        if (level > 50) {
+            color = M5.Lcd.color565(57, 255, 20);   // Neon green
+        } else if (level > 20) {
+            color = M5.Lcd.color565(144, 238, 144); // Light green
+        } else {
+            color = M5.Lcd.color565(255, 0, 0);     // Red
+        }
+        canvas.fillRect(x + 1, y + 1, fillWidth, 6, color);
+    }
+}
+
 void drawFooter(const char* hint, uint8_t hour, uint8_t minute) {
     canvas.fillRect(0, SCREEN_HEIGHT - 18, SCREEN_WIDTH, 18, grays[11]);
     canvas.setTextColor(grays[4]);
     canvas.setTextSize(1);
     canvas.drawString(hint, 6, SCREEN_HEIGHT - 14);
+
+    // Battery indicator
+    int batteryLevel = M5.Power.getBatteryLevel();
+    drawBatteryIcon(SCREEN_WIDTH - 70, SCREEN_HEIGHT - 13, batteryLevel);
 
     // Clock
     char timeStr[6];
