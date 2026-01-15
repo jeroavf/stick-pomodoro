@@ -1,0 +1,56 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+.clang_complete
+.gcc-flags.json
+
+# Build / Binaries
+.pio/build/
+*.elf
+*.bin
+*.hex
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.map
+*.lst
+*.su
+*.d
+*.obj
+*.lib
+
+# Firmware
+*.firmware
+*.flash
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary
+tmp/
+temp/
+
+# Python (for PlatformIO)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.env
