@@ -11,8 +11,8 @@
 // Grayscale palette (13 levels)
 extern uint16_t grays[13];
 
-// Sprite for double-buffering
-extern TFT_eSprite sprite;
+// Canvas for double-buffering
+extern M5Canvas canvas;
 
 // Initialize display and sprite
 void displayInit();

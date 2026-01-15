@@ -81,7 +81,7 @@ void loop() {
     // Update timer
     bool stateChanged = timerUpdate(&settings);
     if (stateChanged && timerJustFinished()) {
-        alertPlay(settings.alertMode, settings.volume);
+        alertPlay(settings.alertMode, settings.volume, settings.beepCount, settings.flashCount);
 
         // Update today stats
         todayStats.pomodoros = timerData.todayPomodoros;

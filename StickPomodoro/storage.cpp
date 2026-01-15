@@ -26,6 +26,8 @@ void loadSettings(Settings* settings) {
     settings->cyclesForLong = prefs.getUChar("cycles", DEFAULT_CYCLES_FOR_LONG);
     settings->alertMode = prefs.getUChar("alert", ALERT_BOTH);
     settings->volume = prefs.getUChar("volume", VOLUME_MEDIUM);
+    settings->beepCount = prefs.getUChar("beeps", DEFAULT_BEEP_COUNT);
+    settings->flashCount = prefs.getUChar("flashes", DEFAULT_FLASH_COUNT);
 }
 
 void saveSettings(Settings* settings) {
@@ -35,6 +37,8 @@ void saveSettings(Settings* settings) {
     prefs.putUChar("cycles", settings->cyclesForLong);
     prefs.putUChar("alert", settings->alertMode);
     prefs.putUChar("volume", settings->volume);
+    prefs.putUChar("beeps", settings->beepCount);
+    prefs.putUChar("flashes", settings->flashCount);
 }
 
 void loadTodayStats(DayStats* stats, const char* todayDate) {

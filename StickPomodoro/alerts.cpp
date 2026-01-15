@@ -7,14 +7,18 @@
 // =============================================================================
 
 static bool alertActive = false;
-static uint8_t beepCount = 0;
-static uint32_t lastBeepMs = 0;
+static uint8_t beepsDone = 0;
+static uint8_t flashesDone = 0;
+static uint8_t targetBeeps = 0;
+static uint8_t targetFlashes = 0;
+static uint32_t lastAlertMs = 0;
 static uint8_t currentVolume = VOLUME_MEDIUM;
+static uint8_t currentMode = ALERT_NONE;
 
 void alertsInit() {
-    // Buzzer is handled by M5StickCPlus2
     alertActive = false;
-    beepCount = 0;
+    beepsDone = 0;
+    flashesDone = 0;
 }
 
 void alertSound(uint8_t volume) {
@@ -44,36 +48,40 @@ void alertVisual() {
     M5.Lcd.invertDisplay(true);
     delay(100);
     M5.Lcd.invertDisplay(false);
-    delay(100);
-    M5.Lcd.invertDisplay(true);
-    delay(100);
-    M5.Lcd.invertDisplay(false);
 }
 
-void alertPlay(uint8_t mode, uint8_t volume) {
+void alertPlay(uint8_t mode, uint8_t volume, uint8_t beepCount, uint8_t flashCount) {
+    currentMode = mode;
     currentVolume = volume;
+    targetBeeps = beepCount;
+    targetFlashes = flashCount;
+    beepsDone = 0;
+    flashesDone = 0;
 
     if (mode == ALERT_NONE) {
         return;
     }
 
+    alertActive = true;
+    lastAlertMs = millis();
+
+    // Play first alert immediately
     if (mode == ALERT_SOUND || mode == ALERT_BOTH) {
-        alertActive = true;
-        beepCount = 0;
-        lastBeepMs = millis();
         alertSound(volume);
-        beepCount++;
+        beepsDone++;
     }
 
     if (mode == ALERT_VISUAL || mode == ALERT_BOTH) {
         alertVisual();
+        flashesDone++;
     }
 }
 
 void alertStop() {
     M5.Speaker.stop();
     alertActive = false;
-    beepCount = 0;
+    beepsDone = 0;
+    flashesDone = 0;
 }
 
 void alertsUpdate() {
@@ -81,14 +89,38 @@ void alertsUpdate() {
 
     uint32_t now = millis();
 
-    // Play 3 beeps with 300ms interval
-    if (beepCount < 3 && (now - lastBeepMs) >= 300) {
-        alertSound(currentVolume);
-        beepCount++;
-        lastBeepMs = now;
+    // Alert interval: 300ms between each beep/flash
+    if ((now - lastAlertMs) < 300) return;
+
+    lastAlertMs = now;
+
+    bool soundDone = true;
+    bool visualDone = true;
+
+    // Handle sound alerts
+    if (currentMode == ALERT_SOUND || currentMode == ALERT_BOTH) {
+        if (beepsDone < targetBeeps) {
+            alertSound(currentVolume);
+            beepsDone++;
+            soundDone = false;
+        }
     }
 
-    if (beepCount >= 3) {
+    // Handle visual alerts
+    if (currentMode == ALERT_VISUAL || currentMode == ALERT_BOTH) {
+        if (flashesDone < targetFlashes) {
+            alertVisual();
+            flashesDone++;
+            visualDone = false;
+        }
+    }
+
+    // Check if all alerts are done
+    if (soundDone && visualDone) {
         alertActive = false;
     }
+}
+
+bool alertIsPlaying() {
+    return alertActive;
 }

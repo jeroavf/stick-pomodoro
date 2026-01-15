@@ -31,6 +31,8 @@ struct Settings {
     uint8_t cyclesForLong;
     uint8_t alertMode;
     uint8_t volume;
+    uint8_t beepCount;    // Number of beeps on timer end
+    uint8_t flashCount;   // Number of visual flashes on timer end
 };
 
 // Daily statistics

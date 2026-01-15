@@ -48,9 +48,10 @@ O display será usado em **modo landscape (240x135)** para melhor aproveitamento
 
 ### 3.2 Alertas (Configurável)
 
-- **Sonoro:** Buzzer com padrões de beep
-- **Visual:** Inversão de cores / pulsação
-- **Configurações:** Somente som | Somente visual | Ambos | Nenhum
+- **Sonoro:** Buzzer com padrões de beep (quantidade configurável 1-10)
+- **Visual:** Inversão de cores (quantidade configurável 1-10)
+- **Modo:** Somente som | Somente visual | Ambos | Nenhum
+- **Volume:** Baixo | Médio | Alto
 
 ### 3.3 Interface Web
 
@@ -318,13 +319,15 @@ POST /api/control    → { action: "start" | "pause" | "reset" | "skip" }
 // Namespace: "pomodoro"
 Preferences prefs;
 
-struct Config {
-    uint8_t focus_min = 25;
-    uint8_t short_min = 5;
-    uint8_t long_min = 15;
-    uint8_t cycles_for_long = 4;
-    uint8_t alert_mode = 3;  // 0=none, 1=sound, 2=visual, 3=both
+struct Settings {
+    uint8_t focusMin = 25;
+    uint8_t shortBreakMin = 5;
+    uint8_t longBreakMin = 15;
+    uint8_t cyclesForLong = 4;
+    uint8_t alertMode = 3;   // 0=none, 1=sound, 2=visual, 3=both
     uint8_t volume = 1;      // 0=low, 1=medium, 2=high
+    uint8_t beepCount = 3;   // Number of beeps (1-10)
+    uint8_t flashCount = 3;  // Number of flashes (1-10)
 };
 ```
 
@@ -362,37 +365,24 @@ StickPomodoro/
 ├── timer.cpp
 ├── storage.h               # Persistência (Prefs + LittleFS)
 ├── storage.cpp
-├── alerts.h                # Buzzer e LED
+├── alerts.h                # Buzzer e alertas visuais
 ├── alerts.cpp
 ├── buttons.h               # Tratamento de botões
 ├── buttons.cpp
-├── webserver.h             # Servidor HTTP
-├── webserver.cpp
-├── fonts/                  # Fontes customizadas
-│   ├── FontTiny.h
-│   ├── FontSmall.h
-│   ├── FontMedium.h
-│   └── FontBig.h
-└── web/                    # HTML/CSS/JS (PROGMEM)
-    ├── index.html.h
-    ├── config.html.h
-    └── style.css.h
+├── webserver.h             # Servidor HTTP + páginas web
+└── webserver.cpp           # HTML/CSS/JS embutidos via PROGMEM
 ```
 
 ### 8.2 Bibliotecas Arduino
 
 ```cpp
 // Core
-#include <M5StickCPlus2.h>      // Hardware abstraction
+#include <M5StickCPlus2.h>      // Hardware abstraction (inclui display M5Canvas)
 #include <WiFi.h>               // WiFi connectivity
-#include <WebServer.h>          // HTTP server
 #include <Preferences.h>        // NVS storage
 #include <LittleFS.h>           // File system
 #include <ArduinoJson.h>        // JSON parsing
 #include <ESP32Time.h>          // RTC handling
-
-// Display (via M5StickCPlus2)
-#include <TFT_eSPI.h>           // Graphics library
 ```
 
 ### 8.3 Configuração Arduino IDE
@@ -411,7 +401,10 @@ StickPomodoro/
 ```cpp
 // StickPomodoro.ino
 
+#include <M5StickCPlus2.h>
+#include <ESP32Time.h>
 #include "config.h"
+#include "types.h"
 #include "display.h"
 #include "timer.h"
 #include "storage.h"
@@ -419,31 +412,39 @@ StickPomodoro/
 #include "buttons.h"
 #include "webserver.h"
 
-TFT_eSprite sprite = TFT_eSprite(&M5.Lcd);
+Settings settings;
+ESP32Time rtc;
 
 void setup() {
-    M5.begin();
-    initDisplay();
-    initStorage();
-    initTimer();
-    initAlerts();
-    initButtons();
-    // WiFi inicia sob demanda
+    auto cfg = M5.config();
+    M5.begin(cfg);
+
+    displayInit();
+    storageInit();
+    loadSettings(&settings);
+    timerInit();
+    alertsInit();
+    buttonsInit();
 }
 
 void loop() {
     M5.update();
-
+    buttonsUpdate();
     handleButtons();
-    updateTimer();
 
-    if (wifiEnabled) {
-        handleWebServer();
+    if (timerUpdate(&settings) && timerJustFinished()) {
+        alertPlay(settings.alertMode, settings.volume,
+                  settings.beepCount, settings.flashCount);
     }
 
-    drawScreen();
+    alertsUpdate();
 
-    delay(10);  // ~100 FPS max
+    if (wifiEnabled) {
+        webServerHandle();
+    }
+
+    updateDisplay();
+    delay(10);
 }
 ```
 
@@ -489,12 +490,11 @@ Qualquer estado + BtnA(longo) = IDLE
 
 ## 11. Critérios de Aceite
 
-- [ ] Timer preciso (±1 segundo por ciclo de 25min)
-- [ ] UI renderiza sem flicker (double-buffering)
-- [ ] Transições de tela suaves
-- [ ] Alertas sonoros/visuais funcionais
-- [ ] Interface web responsiva
-- [ ] Configurações persistem após reinício
+- [x] Timer preciso (±1 segundo por ciclo de 25min)
+- [x] UI renderiza sem flicker (double-buffering com M5Canvas)
+- [x] Alertas sonoros/visuais funcionais e configuráveis
+- [x] Interface web responsiva
+- [x] Configurações persistem após reinício
 - [ ] Histórico armazena 30 dias
 - [ ] Autonomia mínima de 2 horas
 

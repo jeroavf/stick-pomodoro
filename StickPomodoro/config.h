@@ -27,6 +27,11 @@
 #define VOLUME_MEDIUM 1
 #define VOLUME_HIGH 2
 
+// Alert repetitions
+#define DEFAULT_BEEP_COUNT 3
+#define DEFAULT_FLASH_COUNT 3
+#define MAX_ALERT_COUNT 10
+
 // Button timing (ms)
 #define BUTTON_DEBOUNCE_MS 50
 #define BUTTON_LONG_PRESS_MS 2000

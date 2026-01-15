@@ -1,14 +1,16 @@
 #include "webserver.h"
+#include "storage.h"
 #include "config.h"
 #include <WiFi.h>
-#include <WebServer.h>
+#include <WiFiClient.h>
+#include <WiFiAP.h>
 #include <ArduinoJson.h>
 
 // =============================================================================
-// Web Server Module Implementation
+// Web Server Module Implementation (Simple HTTP)
 // =============================================================================
 
-static WebServer server(80);
+static WiFiServer server(80);
 static bool serverActive = false;
 static char apSSID[20] = "";
 static char apIP[16] = "192.168.4.1";
@@ -16,67 +18,55 @@ static char apIP[16] = "192.168.4.1";
 static Settings* pSettings = nullptr;
 static TimerData* pTimer = nullptr;
 
-// HTML pages stored in PROGMEM
+// HTML pages
 static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Stick Pomodoro</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 20px; }
-        .container { max-width: 400px; margin: 0 auto; }
-        h1 { text-align: center; margin-bottom: 20px; color: #fff; }
-        .card { background: #2a2a2a; border-radius: 8px; padding: 20px; margin-bottom: 15px; }
-        .status { text-align: center; font-size: 48px; font-weight: bold; }
-        .state { text-align: center; color: #888; margin-bottom: 10px; }
-        .stats { display: flex; justify-content: space-around; text-align: center; }
-        .stat-value { font-size: 24px; font-weight: bold; }
-        .stat-label { font-size: 12px; color: #888; }
-        .btn { display: block; width: 100%; padding: 15px; border: none; border-radius: 8px;
-               font-size: 16px; cursor: pointer; margin-top: 10px; }
-        .btn-primary { background: #4a4a4a; color: #fff; }
-        .btn-primary:hover { background: #5a5a5a; }
-        a { color: #888; text-decoration: none; display: block; text-align: center; margin-top: 15px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stick Pomodoro</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:sans-serif;background:#1a1a1a;color:#e0e0e0;padding:20px}
+.c{max-width:400px;margin:0 auto}
+h1{text-align:center;margin-bottom:20px}
+.card{background:#2a2a2a;border-radius:8px;padding:20px;margin-bottom:15px}
+.timer{text-align:center;font-size:48px;font-weight:bold}
+.state{text-align:center;color:#888;margin-bottom:10px}
+.stats{display:flex;justify-content:space-around;text-align:center}
+.sv{font-size:24px;font-weight:bold}
+.sl{font-size:12px;color:#888}
+.btn{display:block;width:100%;padding:15px;border:none;border-radius:8px;font-size:16px;cursor:pointer;margin-top:10px;background:#4a4a4a;color:#fff}
+a{color:#888;text-decoration:none;display:block;text-align:center;margin-top:15px}
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>Stick Pomodoro</h1>
-        <div class="card">
-            <div class="state" id="state">-</div>
-            <div class="status" id="timer">--:--</div>
-        </div>
-        <div class="card">
-            <div class="stats">
-                <div><div class="stat-value" id="pomodoros">0</div><div class="stat-label">Pomodoros</div></div>
-                <div><div class="stat-value" id="focus">0m</div><div class="stat-label">Foco</div></div>
-                <div><div class="stat-value" id="cycle">1/4</div><div class="stat-label">Ciclo</div></div>
-            </div>
-        </div>
-        <button class="btn btn-primary" onclick="control('toggle')">Iniciar / Pausar</button>
-        <button class="btn btn-primary" onclick="control('reset')">Resetar</button>
-        <a href="/config">Configuracoes</a>
-    </div>
-    <script>
-        function update() {
-            fetch('/api/status').then(r => r.json()).then(d => {
-                document.getElementById('state').textContent = d.state;
-                document.getElementById('timer').textContent = d.time;
-                document.getElementById('pomodoros').textContent = d.pomodoros;
-                document.getElementById('focus').textContent = d.focus;
-                document.getElementById('cycle').textContent = d.cycle + '/' + d.maxCycle;
-            });
-        }
-        function control(action) {
-            fetch('/api/control', {method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({action: action})}).then(() => update());
-        }
-        setInterval(update, 1000);
-        update();
-    </script>
+<div class="c">
+<h1>Stick Pomodoro</h1>
+<div class="card">
+<div class="state" id="st">-</div>
+<div class="timer" id="tm">--:--</div>
+</div>
+<div class="card">
+<div class="stats">
+<div><div class="sv" id="pm">0</div><div class="sl">Pomodoros</div></div>
+<div><div class="sv" id="fc">0m</div><div class="sl">Foco</div></div>
+<div><div class="sv" id="cy">1/4</div><div class="sl">Ciclo</div></div>
+</div>
+</div>
+<a href="/config">Configuracoes</a>
+</div>
+<script>
+function u(){fetch('/api/status').then(r=>r.json()).then(d=>{
+document.getElementById('st').textContent=d.s;
+document.getElementById('tm').textContent=d.t;
+document.getElementById('pm').textContent=d.p;
+document.getElementById('fc').textContent=d.f;
+document.getElementById('cy').textContent=d.c+'/'+d.m;
+});}
+setInterval(u,1000);u();
+</script>
 </body>
 </html>
 )rawliteral";
@@ -85,156 +75,178 @@ static const char CONFIG_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Configuracoes</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 20px; }
-        .container { max-width: 400px; margin: 0 auto; }
-        h1 { text-align: center; margin-bottom: 20px; color: #fff; }
-        .card { background: #2a2a2a; border-radius: 8px; padding: 20px; margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; color: #888; }
-        input, select { width: 100%; padding: 10px; border: 1px solid #444; border-radius: 4px;
-                        background: #333; color: #fff; margin-bottom: 15px; }
-        .btn { display: block; width: 100%; padding: 15px; border: none; border-radius: 8px;
-               font-size: 16px; cursor: pointer; }
-        .btn-primary { background: #4a4a4a; color: #fff; }
-        a { color: #888; text-decoration: none; display: block; text-align: center; margin-top: 15px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Config</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:sans-serif;background:#1a1a1a;color:#e0e0e0;padding:20px}
+.c{max-width:400px;margin:0 auto}
+h1{text-align:center;margin-bottom:20px}
+.card{background:#2a2a2a;border-radius:8px;padding:20px;margin-bottom:15px}
+label{display:block;margin-bottom:5px;color:#888}
+input,select{width:100%;padding:10px;border:1px solid #444;border-radius:4px;background:#333;color:#fff;margin-bottom:15px}
+.btn{display:block;width:100%;padding:15px;border:none;border-radius:8px;font-size:16px;cursor:pointer;background:#4a4a4a;color:#fff}
+a{color:#888;text-decoration:none;display:block;text-align:center;margin-top:15px}
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>Configuracoes</h1>
-        <form id="configForm">
-            <div class="card">
-                <label>Tempo de Foco (min)</label>
-                <input type="number" id="focus" min="1" max="60" value="25">
-                <label>Descanso Curto (min)</label>
-                <input type="number" id="short" min="1" max="30" value="5">
-                <label>Descanso Longo (min)</label>
-                <input type="number" id="long" min="1" max="60" value="15">
-                <label>Ciclos para Descanso Longo</label>
-                <input type="number" id="cycles" min="1" max="10" value="4">
-            </div>
-            <div class="card">
-                <label>Modo de Alerta</label>
-                <select id="alert">
-                    <option value="0">Nenhum</option>
-                    <option value="1">Som</option>
-                    <option value="2">Visual</option>
-                    <option value="3" selected>Ambos</option>
-                </select>
-                <label>Volume</label>
-                <select id="volume">
-                    <option value="0">Baixo</option>
-                    <option value="1" selected>Medio</option>
-                    <option value="2">Alto</option>
-                </select>
-            </div>
-            <button type="submit" class="btn btn-primary">Salvar</button>
-        </form>
-        <a href="/">Voltar</a>
-    </div>
-    <script>
-        fetch('/api/config').then(r => r.json()).then(d => {
-            document.getElementById('focus').value = d.focus;
-            document.getElementById('short').value = d.short;
-            document.getElementById('long').value = d.long;
-            document.getElementById('cycles').value = d.cycles;
-            document.getElementById('alert').value = d.alert;
-            document.getElementById('volume').value = d.volume;
-        });
-        document.getElementById('configForm').onsubmit = function(e) {
-            e.preventDefault();
-            fetch('/api/config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    focus: parseInt(document.getElementById('focus').value),
-                    short: parseInt(document.getElementById('short').value),
-                    long: parseInt(document.getElementById('long').value),
-                    cycles: parseInt(document.getElementById('cycles').value),
-                    alert: parseInt(document.getElementById('alert').value),
-                    volume: parseInt(document.getElementById('volume').value)
-                })
-            }).then(() => alert('Salvo!'));
-        };
-    </script>
+<div class="c">
+<h1>Configuracoes</h1>
+<form id="f">
+<div class="card">
+<label>Foco (min)</label>
+<input type="number" id="fo" min="1" max="60" value="25">
+<label>Descanso Curto (min)</label>
+<input type="number" id="sh" min="1" max="30" value="5">
+<label>Descanso Longo (min)</label>
+<input type="number" id="lo" min="1" max="60" value="15">
+<label>Ciclos</label>
+<input type="number" id="cy" min="1" max="10" value="4">
+</div>
+<div class="card">
+<label>Alerta</label>
+<select id="al">
+<option value="0">Nenhum</option>
+<option value="1">Som</option>
+<option value="2">Visual</option>
+<option value="3" selected>Ambos</option>
+</select>
+<label>Volume</label>
+<select id="vo">
+<option value="0">Baixo</option>
+<option value="1" selected>Medio</option>
+<option value="2">Alto</option>
+</select>
+<label>Num. Beeps</label>
+<input type="number" id="bp" min="1" max="10" value="3">
+<label>Num. Flashes</label>
+<input type="number" id="fl" min="1" max="10" value="3">
+</div>
+<button type="submit" class="btn">Salvar</button>
+</form>
+<a href="/">Voltar</a>
+</div>
+<script>
+fetch('/api/config').then(r=>r.json()).then(d=>{
+document.getElementById('fo').value=d.fo;
+document.getElementById('sh').value=d.sh;
+document.getElementById('lo').value=d.lo;
+document.getElementById('cy').value=d.cy;
+document.getElementById('al').value=d.al;
+document.getElementById('vo').value=d.vo;
+document.getElementById('bp').value=d.bp;
+document.getElementById('fl').value=d.fl;
+});
+document.getElementById('f').onsubmit=function(e){
+e.preventDefault();
+var p='fo='+document.getElementById('fo').value;
+p+='&sh='+document.getElementById('sh').value;
+p+='&lo='+document.getElementById('lo').value;
+p+='&cy='+document.getElementById('cy').value;
+p+='&al='+document.getElementById('al').value;
+p+='&vo='+document.getElementById('vo').value;
+p+='&bp='+document.getElementById('bp').value;
+p+='&fl='+document.getElementById('fl').value;
+fetch('/api/save?'+p).then(()=>alert('Salvo!'));
+};
+</script>
 </body>
 </html>
 )rawliteral";
 
 static const char* stateNames[] = {"Pronto", "Foco", "Descanso", "Descanso Longo", "Pausado"};
 
-static void handleRoot() {
-    server.send(200, "text/html", INDEX_HTML);
+static void sendResponse(WiFiClient& client, int code, const char* contentType, const char* body) {
+    client.println("HTTP/1.1 " + String(code) + " OK");
+    client.println("Content-Type: " + String(contentType));
+    client.println("Connection: close");
+    client.println();
+    client.print(body);
 }
 
-static void handleConfig() {
-    server.send(200, "text/html", CONFIG_HTML);
+static void sendHtml(WiFiClient& client, const char* html) {
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: text/html; charset=utf-8");
+    client.println("Connection: close");
+    client.println();
+
+    // ESP32 has unified memory, can read PROGMEM directly
+    client.print(html);
 }
 
-static void handleApiStatus() {
-    JsonDocument doc;
-
-    doc["state"] = stateNames[pTimer->state];
-
-    uint8_t min = pTimer->remainingSec / 60;
-    uint8_t sec = pTimer->remainingSec % 60;
-    char timeStr[6];
-    sprintf(timeStr, "%02d:%02d", min, sec);
-    doc["time"] = timeStr;
-
-    doc["pomodoros"] = pTimer->todayPomodoros;
-
-    uint32_t focusMin = pTimer->todayFocusSec / 60;
-    char focusStr[10];
-    if (focusMin >= 60) {
-        sprintf(focusStr, "%ldh%ldm", focusMin / 60, focusMin % 60);
-    } else {
-        sprintf(focusStr, "%ldm", focusMin);
+static void handleRequest(WiFiClient& client, String& request) {
+    if (request.indexOf("GET / ") >= 0) {
+        sendHtml(client, INDEX_HTML);
     }
-    doc["focus"] = focusStr;
-    doc["cycle"] = pTimer->currentCycle;
-    doc["maxCycle"] = pSettings->cyclesForLong;
-
-    String response;
-    serializeJson(doc, response);
-    server.send(200, "application/json", response);
-}
-
-static void handleApiConfig() {
-    if (server.method() == HTTP_GET) {
-        JsonDocument doc;
-        doc["focus"] = pSettings->focusMin;
-        doc["short"] = pSettings->shortBreakMin;
-        doc["long"] = pSettings->longBreakMin;
-        doc["cycles"] = pSettings->cyclesForLong;
-        doc["alert"] = pSettings->alertMode;
-        doc["volume"] = pSettings->volume;
-
-        String response;
-        serializeJson(doc, response);
-        server.send(200, "application/json", response);
-    } else if (server.method() == HTTP_POST) {
-        JsonDocument doc;
-        deserializeJson(doc, server.arg("plain"));
-
-        pSettings->focusMin = doc["focus"] | pSettings->focusMin;
-        pSettings->shortBreakMin = doc["short"] | pSettings->shortBreakMin;
-        pSettings->longBreakMin = doc["long"] | pSettings->longBreakMin;
-        pSettings->cyclesForLong = doc["cycles"] | pSettings->cyclesForLong;
-        pSettings->alertMode = doc["alert"] | pSettings->alertMode;
-        pSettings->volume = doc["volume"] | pSettings->volume;
-
-        server.send(200, "application/json", "{\"ok\":true}");
+    else if (request.indexOf("GET /config") >= 0) {
+        sendHtml(client, CONFIG_HTML);
     }
-}
+    else if (request.indexOf("GET /api/status") >= 0) {
+        char json[200];
+        uint8_t min = pTimer->remainingSec / 60;
+        uint8_t sec = pTimer->remainingSec % 60;
+        uint32_t focusMin = pTimer->todayFocusSec / 60;
 
-static void handleApiControl() {
-    // Control is handled in main loop
-    server.send(200, "application/json", "{\"ok\":true}");
+        char timeStr[8], focusStr[16];
+        sprintf(timeStr, "%02d:%02d", min, sec);
+        if (focusMin >= 60) {
+            sprintf(focusStr, "%ldh%ldm", focusMin / 60, focusMin % 60);
+        } else {
+            sprintf(focusStr, "%ldm", focusMin);
+        }
+
+        sprintf(json, "{\"s\":\"%s\",\"t\":\"%s\",\"p\":%d,\"f\":\"%s\",\"c\":%d,\"m\":%d}",
+            stateNames[pTimer->state], timeStr, pTimer->todayPomodoros,
+            focusStr, pTimer->currentCycle, pSettings->cyclesForLong);
+
+        sendResponse(client, 200, "application/json", json);
+    }
+    else if (request.indexOf("GET /api/config") >= 0) {
+        char json[150];
+        sprintf(json, "{\"fo\":%d,\"sh\":%d,\"lo\":%d,\"cy\":%d,\"al\":%d,\"vo\":%d,\"bp\":%d,\"fl\":%d}",
+            pSettings->focusMin, pSettings->shortBreakMin, pSettings->longBreakMin,
+            pSettings->cyclesForLong, pSettings->alertMode, pSettings->volume,
+            pSettings->beepCount, pSettings->flashCount);
+
+        sendResponse(client, 200, "application/json", json);
+    }
+    else if (request.indexOf("GET /api/save") >= 0) {
+        // Parse parameters from URL
+        int idx;
+
+        idx = request.indexOf("fo=");
+        if (idx > 0) pSettings->focusMin = request.substring(idx + 3).toInt();
+
+        idx = request.indexOf("sh=");
+        if (idx > 0) pSettings->shortBreakMin = request.substring(idx + 3).toInt();
+
+        idx = request.indexOf("lo=");
+        if (idx > 0) pSettings->longBreakMin = request.substring(idx + 3).toInt();
+
+        idx = request.indexOf("cy=");
+        if (idx > 0) pSettings->cyclesForLong = request.substring(idx + 3).toInt();
+
+        idx = request.indexOf("al=");
+        if (idx > 0) pSettings->alertMode = request.substring(idx + 3).toInt();
+
+        idx = request.indexOf("vo=");
+        if (idx > 0) pSettings->volume = request.substring(idx + 3).toInt();
+
+        idx = request.indexOf("bp=");
+        if (idx > 0) pSettings->beepCount = request.substring(idx + 3).toInt();
+
+        idx = request.indexOf("fl=");
+        if (idx > 0) pSettings->flashCount = request.substring(idx + 3).toInt();
+
+        // Persist settings to NVS
+        saveSettings(pSettings);
+
+        sendResponse(client, 200, "application/json", "{\"ok\":true}");
+    }
+    else {
+        sendResponse(client, 404, "text/plain", "Not Found");
+    }
 }
 
 void webServerStart(Settings* settings, TimerData* timer) {
@@ -252,13 +264,6 @@ void webServerStart(Settings* settings, TimerData* timer) {
     IPAddress ip = WiFi.softAPIP();
     sprintf(apIP, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 
-    server.on("/", handleRoot);
-    server.on("/config", handleConfig);
-    server.on("/api/status", handleApiStatus);
-    server.on("/api/config", HTTP_GET, handleApiConfig);
-    server.on("/api/config", HTTP_POST, handleApiConfig);
-    server.on("/api/control", HTTP_POST, handleApiControl);
-
     server.begin();
     serverActive = true;
 
@@ -274,9 +279,30 @@ void webServerStop() {
 }
 
 void webServerHandle() {
-    if (serverActive) {
-        server.handleClient();
+    if (!serverActive) return;
+
+    WiFiClient client = server.available();
+    if (!client) return;
+
+    // Wait for data
+    unsigned long timeout = millis() + 1000;
+    while (!client.available() && millis() < timeout) {
+        delay(1);
     }
+
+    if (!client.available()) {
+        client.stop();
+        return;
+    }
+
+    // Read request
+    String request = "";
+    while (client.available()) {
+        request += (char)client.read();
+    }
+
+    handleRequest(client, request);
+    client.stop();
 }
 
 bool webServerIsActive() {
